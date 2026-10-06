@@ -1168,4 +1168,4 @@ A modularidade das camadas (**Domain**, **Application**, **Infrastructure** e **
 Em resumo, o **OrderService** é mais do que uma API de pedidos; é uma demonstração prática do potencial da Clean Architecture e do CQRS na construção de soluções .NET sólidas, legíveis e prontas para conversa técnica. O projeto permanece aberto a contribuições, refinamentos e próximos passos como autorização por recurso, hardening de segredos e testes de concorrência com PostgreSQL real — convidando evolução contínua da base entregue.
 
 **Desenvolvido por:**  
-Emerson Amorim [@emerson-amorim-dev](https://github.com/emerson-amorim-dev)
+Emerson Amorim [@emerson-amorim-dev](https://github.com/emersonamorim-dev)
