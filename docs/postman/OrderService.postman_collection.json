@@ -1,0 +1,676 @@
+{
+  "info": {
+    "_postman_id": "f7c3e9a1-2b4d-4e6f-8a0c-1d2e3f4a5b6c",
+    "name": "OrderService API",
+    "description": "Collection oficial do OrderService (Nstech Challenge).\n\nFluxo sugerido:\n1. Auth → Issue Token\n2. Happy Path → Create → Get → List → Confirm → Cancel\n3. Edge Cases conforme o guia em docs/testing-guide.md\n\nPré-requisito: `docker compose up --build` e environment **OrderService — Docker**.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "username", "value": "demo" },
+    { "key": "password", "value": "demo" },
+    { "key": "accessToken", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "customerId", "value": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" },
+    { "key": "productIdA", "value": "11111111-1111-1111-1111-111111111111" },
+    { "key": "productIdB", "value": "22222222-2222-2222-2222-222222222222" },
+    { "key": "productIdC", "value": "33333333-3333-3333-3333-333333333333" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "00 — Health",
+      "item": [
+        {
+          "name": "GET Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "Healthcheck operacional da API."
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 — Auth",
+      "item": [
+        {
+          "name": "POST Auth Token (sucesso)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Retorna accessToken', () => pm.expect(body.accessToken).to.be.a('string').and.not.empty);",
+                  "pm.test('TokenType Bearer', () => pm.expect(body.tokenType).to.eql('Bearer'));",
+                  "pm.test('ExpiresIn > 0', () => pm.expect(body.expiresIn).to.be.above(0));",
+                  "pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "pm.environment.set('accessToken', body.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/token",
+            "description": "Emite JWT. Salva automaticamente `accessToken` na collection/environment."
+          }
+        },
+        {
+          "name": "POST Auth Token (credenciais inválidas)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"demo\",\n  \"password\": \"wrong-password\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/token",
+            "description": "Deve rejeitar credenciais inválidas com 401."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 — Happy Path",
+      "item": [
+        {
+          "name": "POST Create Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Status Placed', () => pm.expect(body.status).to.eql('Placed'));",
+                  "pm.test('Total = 20.00 (2 x 10)', () => pm.expect(Number(body.total)).to.eql(20));",
+                  "pm.test('Possui itens', () => pm.expect(body.items).to.be.an('array').and.have.lengthOf(1));",
+                  "pm.collectionVariables.set('orderId', body.id);",
+                  "pm.environment.set('orderId', body.id);",
+                  "pm.environment.set('orderIdConfirm', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"currency\": \"BRL\",\n  \"items\": [\n    {\n      \"productId\": \"{{productIdA}}\",\n      \"quantity\": 2\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/orders",
+            "description": "Cria pedido Placed. Salva `orderId` para os próximos requests."
+          }
+        },
+        {
+          "name": "GET Order By Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Id corresponde', () => pm.expect(body.id).to.eql(pm.environment.get('orderId') || pm.collectionVariables.get('orderId')));",
+                  "pm.test('Retorna itens', () => pm.expect(body.items.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/orders/{{orderId}}",
+            "description": "Consulta pedido + itens."
+          }
+        },
+        {
+          "name": "GET List Orders (paginado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Paginação presente', () => {",
+                  "  pm.expect(body.page).to.eql(1);",
+                  "  pm.expect(body.pageSize).to.eql(20);",
+                  "  pm.expect(body.items).to.be.an('array');",
+                  "  pm.expect(body.totalCount).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders?customerId={{customerId}}&status=Placed&page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"],
+              "query": [
+                { "key": "customerId", "value": "{{customerId}}" },
+                { "key": "status", "value": "Placed" },
+                { "key": "from", "value": "", "disabled": true },
+                { "key": "to", "value": "", "disabled": true },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            },
+            "description": "Lista pedidos com filtros e paginação."
+          }
+        },
+        {
+          "name": "POST Confirm Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Status Confirmed', () => pm.expect(body.status).to.eql('Confirmed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/orders/{{orderId}}/confirm",
+            "description": "Confirma pedido Placed → Confirmed e baixa estoque."
+          }
+        },
+        {
+          "name": "POST Confirm Order (idempotente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Permanece Confirmed', () => pm.expect(body.status).to.eql('Confirmed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/orders/{{orderId}}/confirm",
+            "description": "Segunda confirmação deve manter o mesmo resultado (idempotência)."
+          }
+        },
+        {
+          "name": "POST Cancel Order (após confirm)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Status Canceled', () => pm.expect(body.status).to.eql('Canceled'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/orders/{{orderId}}/cancel",
+            "description": "Cancela pedido Confirmed e libera estoque."
+          }
+        },
+        {
+          "name": "POST Cancel Order (idempotente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Permanece Canceled', () => pm.expect(body.status).to.eql('Canceled'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/orders/{{orderId}}/cancel",
+            "description": "Segundo cancelamento deve manter o mesmo resultado (idempotência)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 — Cancel from Placed",
+      "item": [
+        {
+          "name": "POST Create Order (para cancel direto)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('orderId', body.id);",
+                  "pm.environment.set('orderId', body.id);",
+                  "pm.environment.set('orderIdCancel', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"currency\": \"BRL\",\n  \"items\": [\n    {\n      \"productId\": \"{{productIdB}}\",\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/orders",
+            "description": "Cria pedido Placed para cancelamento sem confirmação prévia."
+          }
+        },
+        {
+          "name": "POST Cancel Order (from Placed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Status Canceled', () => pm.expect(body.status).to.eql('Canceled'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/orders/{{orderId}}/cancel",
+            "description": "Cancela pedido ainda em Placed (estoque ainda não baixado)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 — Edge Cases / Validações",
+      "item": [
+        {
+          "name": "POST Create Order sem JWT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"currency\": \"BRL\",\n  \"items\": [\n    {\n      \"productId\": \"{{productIdA}}\",\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/orders",
+            "description": "Sem Authorization → 401."
+          }
+        },
+        {
+          "name": "POST Create Order sem itens",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"currency\": \"BRL\",\n  \"items\": []\n}"
+            },
+            "url": "{{baseUrl}}/orders",
+            "description": "Pedido sem itens → 400."
+          }
+        },
+        {
+          "name": "POST Create Order quantity <= 0",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"currency\": \"BRL\",\n  \"items\": [\n    {\n      \"productId\": \"{{productIdA}}\",\n      \"quantity\": 0\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/orders",
+            "description": "Quantidade inválida → 400."
+          }
+        },
+        {
+          "name": "POST Create Order produto inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"currency\": \"BRL\",\n  \"items\": [\n    {\n      \"productId\": \"99999999-9999-9999-9999-999999999999\",\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/orders",
+            "description": "Produto inexistente → 404."
+          }
+        },
+        {
+          "name": "POST Create Order estoque insuficiente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"currency\": \"BRL\",\n  \"items\": [\n    {\n      \"productId\": \"{{productIdC}}\",\n      \"quantity\": 999\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/orders",
+            "description": "Widget C tem estoque 5. Quantity 999 → 409 Insufficient stock."
+          }
+        },
+        {
+          "name": "GET Order inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/orders/00000000-0000-0000-0000-000000000000",
+            "description": "Pedido inexistente → 404."
+          }
+        },
+        {
+          "name": "POST Confirm pedido cancelado (estado inválido)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Requer orderId de um pedido já Canceled (rode pasta 02 ou 03 antes)."
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409 Invalid order state', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/orders/{{orderId}}/confirm",
+            "description": "Confirmar pedido Canceled deve falhar com 409 Invalid order state.\n\nPré-condição: `orderId` aponta para pedido já cancelado (execute Happy Path ou Cancel from Placed antes)."
+          }
+        },
+        {
+          "name": "GET List Orders com status inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders?status=Unknown&page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"],
+              "query": [
+                { "key": "status", "value": "Unknown" },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            },
+            "description": "Status inválido no filtro → 400 ValidationProblem."
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 — Filtros de listagem",
+      "item": [
+        {
+          "name": "GET List by customerId",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Todos os itens do customer', () => {",
+                  "  body.items.forEach(o => pm.expect(o.customerId).to.eql(pm.environment.get('customerId') || pm.collectionVariables.get('customerId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders?customerId={{customerId}}&page=1&pageSize=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"],
+              "query": [
+                { "key": "customerId", "value": "{{customerId}}" },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET List by status Confirmed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders?status=Confirmed&page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"],
+              "query": [
+                { "key": "status", "value": "Confirmed" },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET List by date range",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders?from=2020-01-01T00:00:00Z&to=2099-12-31T23:59:59Z&page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"],
+              "query": [
+                { "key": "from", "value": "2020-01-01T00:00:00Z" },
+                { "key": "to", "value": "2099-12-31T23:59:59Z" },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            },
+            "description": "Filtro por intervalo de CreatedAt (ISO-8601)."
+          }
+        }
+      ]
+    }
+  ]
+}
