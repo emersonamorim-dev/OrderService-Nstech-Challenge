@@ -10,7 +10,6 @@ Nenhuma feature entra em código sem spec aprovada e tasks rastreáveis.
 | `specs/` (raiz da solution) | Padrão SDD/OpenSpec; visível no PR; independente de camadas | **Escolhido** |
 | `docs/specs/` | Mistura ADR com requisitos vivos | Evitado |
 | Dentro de `src/` ou `OrderService/` | Spec vira artefato de código e some no refactor | Evitado |
-| `.cursor/` apenas | Ferramenta de IDE, não entrega de engenharia | Complementar |
 
 Estrutura alvo da solution (após implementação):
 
